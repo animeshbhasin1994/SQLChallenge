@@ -1,4 +1,4 @@
 # SQLChallenge
-This repo is for Danny Ma'8 week sql challenge. More details on https://8weeksqlchallenge.com/
+This repo is for my solutions to Danny Ma's [8 week sql challenge](https://8weeksqlchallenge.com/)
 
 
