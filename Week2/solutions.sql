@@ -1,3 +1,4 @@
+-- Preprocess/Cleanse data
 drop table if exists customer_orders_clean;
 create table customer_orders_clean as
 select
