@@ -261,3 +261,121 @@ from
 group by
 	runner_id ;
 
+--C Ingredient Optimisation !
+-- 1. What are the standard ingredients for each pizza?
+with pizza_ingredients as (
+select
+	pizza_id,
+	unnest(string_to_array(toppings, ','))::numeric as topping_id
+from
+	pizza_recipes pr)
+select
+	pn.pizza_name ,
+	pt.topping_name
+from
+	pizza_ingredients pi
+join pizza_names pn on
+	pi.pizza_id = pn.pizza_id
+join pizza_toppings pt on
+	pt.topping_id = pi.topping_id ;
+
+-- 2. What was the most commonly added extra?
+with order_extras as (
+select
+	order_id,
+	unnest(string_to_array(extras , ','))::numeric as topping_id
+from
+	customer_orders_clean coc
+	)
+select oe.topping_id,pt.topping_name ,count(oe.topping_id) as no_of_times_ordered
+from order_extras oe
+join pizza_toppings pt on
+	oe.topping_id = pt.topping_id
+group by
+	oe.topping_id,pt.topping_name
+order by
+	no_of_times_ordered desc;
+
+-- 3. What was the most common exclusion?
+
+with order_exclusions as (
+select
+	order_id,
+	unnest(string_to_array(exclusions , ','))::numeric as topping_id
+from
+	customer_orders_clean coc
+	)
+select oe.topping_id,pt.topping_name ,count(oe.topping_id) as no_of_times_excluded
+from order_exclusions oe
+join pizza_toppings pt on
+	oe.topping_id = pt.topping_id
+group by
+	oe.topping_id,pt.topping_name
+order by
+	no_of_times_excluded desc;
+
+-- 4. Generate an order item for each record in the customers_orders table in the format of one of the following:
+--     Meat Lovers
+--     Meat Lovers - Exclude Beef
+--     Meat Lovers - Extra Bacon
+--     Meat Lovers - Exclude Cheese, Bacon - Extra Mushroom, Peppers
+
+-- Need to debug further (not completely correct for order_id = 10)
+with pizza_name as (
+select
+	coc.order_id ,
+	coc.pizza_id ,
+	pn.pizza_name
+from
+	customer_orders_clean coc
+left join pizza_names pn on
+	coc.pizza_id = pn.pizza_id ),
+order_exclusions as (
+select
+	order_id,
+	pt.topping_name as exclusion_1 ,
+	pt2.topping_name as exclusion_2,
+	case
+		when pt.topping_name is not null
+		and pt2.topping_name is not null then concat(' - Exclude ' , pt.topping_name, ', ' , pt2.topping_name)
+		when pt.topping_name is not null then concat(' - Exclude ' , pt.topping_name)
+	end as order_summary
+from
+	customer_orders_clean coc
+ left join pizza_toppings pt on
+	split_part(coc.exclusions, ',', 1)::numeric = pt.topping_id
+ left join pizza_toppings pt2 on
+	case
+		when split_part(coc.exclusions, ',', 2) = '' then null
+		else split_part(coc.exclusions, ',', 2)::numeric
+	end = pt2.topping_id ),
+order_extras as (
+select
+	order_id,
+	pt3.topping_name as extra_1,
+	pt4.topping_name as extra_2,
+	case
+		when pt3.topping_name is not null
+		and pt4.topping_name is not null then concat(' - Extra ' , pt3.topping_name, ', ' , pt4.topping_name)
+		when pt3.topping_name is not null then concat(' - Extra ' , pt3.topping_name)
+		else null
+	end as order_summary
+from
+	customer_orders_clean coc
+ left join pizza_toppings pt3 on
+	split_part(coc.extras, ',', 1)::numeric = pt3.topping_id
+ left join pizza_toppings pt4 on
+	case
+		when split_part(coc.extras, ',', 2) = '' then null
+		else split_part(coc.extras, ',', 2)::numeric
+	end = pt4.topping_id )
+select
+	distinct
+	pn.order_id,
+	concat(pn.pizza_name, oe.order_summary, oex.order_summary),
+from
+	pizza_name pn
+join order_exclusions oe on
+	pn.order_id = oe.order_id
+join order_extras oex on
+	pn.order_id = oex.order_id;
